@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Send, MessageSquare, Trash2, BarChart3, Shield } from 'lucide-react';
+import { Send, MessageSquare, Trash2, BarChart3, Shield, Search, MoreHorizontal, FolderOpen, Code } from 'lucide-react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([]);
@@ -10,6 +12,7 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState('');
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -147,7 +150,8 @@ export default function ChatPage() {
     <div className="flex h-screen bg-[#0A0A0A] text-white">
       {/* Sidebar */}
       <div className="w-64 bg-[#171717] border-r border-[#2A2A2A] flex flex-col">
-        <div className="p-3 border-b border-[#2A2A2A]">
+        {/* Sidebar Header */}
+        <div className="p-3 space-y-2">
           <button
             onClick={startNewChat}
             className="w-full bg-white hover:bg-gray-100 text-black font-medium px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors"
@@ -155,43 +159,68 @@ export default function ChatPage() {
             <MessageSquare size={18} />
             New Chat
           </button>
+          
+          {/* Search */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search chats"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#0A0A0A] text-white placeholder-gray-500 pl-9 pr-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-600"
+            />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversations.map(conv => (
-            <div
-              key={conv.id}
-              className={`group relative p-3 rounded-lg cursor-pointer transition-all ${
-                currentConversationId === conv.id 
-                  ? 'bg-[#2A2A2A]' 
-                  : 'hover:bg-[#212121]'
-              }`}
-            >
-              <div
-                onClick={() => loadConversation(conv.id)}
-                className="flex-1 pr-8"
-              >
-                <div className="text-sm font-medium truncate text-gray-100">
-                  {conv.title || 'New Conversation'}
+        {/* Recents Section */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-3 py-2">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Recents</h3>
+          </div>
+          
+          <div className="px-2 space-y-1">
+            {conversations
+              .filter(conv => 
+                !searchQuery || 
+                conv.title?.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+              .map(conv => (
+                <div
+                  key={conv.id}
+                  className={`group relative p-3 rounded-lg cursor-pointer transition-all ${
+                    currentConversationId === conv.id 
+                      ? 'bg-[#2A2A2A]' 
+                      : 'hover:bg-[#212121]'
+                  }`}
+                >
+                  <div
+                    onClick={() => loadConversation(conv.id)}
+                    className="flex-1 pr-8"
+                  >
+                    <div className="text-sm font-medium truncate text-gray-100">
+                      {conv.title || 'New Conversation'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {new Date(conv.updatedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(conv.id, conv.title);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {new Date(conv.updatedAt).toLocaleDateString()}
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteConversation(conv.id, conv.title);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
+              ))}
+          </div>
         </div>
 
-        <div className="p-3 border-t border-[#2A2A2A]">
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-[#2A2A2A] space-y-2">
           <Link
             href="/dashboard"
             className="w-full bg-[#2A2A2A] hover:bg-[#333333] text-gray-200 px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors"
@@ -236,7 +265,44 @@ export default function ChatPage() {
                       : 'bg-[#2A2A2A] text-gray-100 rounded-bl-md'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                  {msg.role === 'assistant' ? (
+                    <div className="prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({node, inline, className, children, ...props}) {
+                            return inline ? (
+                              <code className="bg-[#1A1A1A] px-1.5 py-0.5 rounded text-blue-400" {...props}>
+                                {children}
+                              </code>
+                            ) : (
+                              <code className="block bg-[#1A1A1A] p-3 rounded-lg overflow-x-auto text-sm" {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
+                          p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                          ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                          ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                          li: ({children}) => <li className="ml-2">{children}</li>,
+                          h1: ({children}) => <h1 className="text-xl font-bold mb-2">{children}</h1>,
+                          h2: ({children}) => <h2 className="text-lg font-bold mb-2">{children}</h2>,
+                          h3: ({children}) => <h3 className="text-base font-bold mb-2">{children}</h3>,
+                          strong: ({children}) => <strong className="font-bold text-white">{children}</strong>,
+                          em: ({children}) => <em className="italic">{children}</em>,
+                          blockquote: ({children}) => (
+                            <blockquote className="border-l-4 border-blue-500 pl-4 italic my-2">
+                              {children}
+                            </blockquote>
+                          ),
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                  )}
                 </div>
                 {msg.role === 'user' && (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center flex-shrink-0 mt-1">
@@ -251,11 +317,14 @@ export default function ChatPage() {
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                   <MessageSquare size={16} className="text-white" />
                 </div>
-                <div className="bg-[#2A2A2A] px-5 py-3 rounded-2xl rounded-bl-md">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="bg-[#2A2A2A] px-5 py-4 rounded-2xl rounded-bl-md">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                    <span className="text-sm text-gray-400 ml-2">AI is thinking...</span>
                   </div>
                 </div>
               </div>
