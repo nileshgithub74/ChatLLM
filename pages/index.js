@@ -20,6 +20,13 @@ export default function ChatPage() {
     localStorage.setItem('sessionId', id);
     setSessionId(id);
     loadConversations();
+    
+    // Refresh conversations every 5 seconds to show new chats
+    const interval = setInterval(() => {
+      loadConversations();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -30,7 +37,9 @@ export default function ChatPage() {
     try {
       const res = await fetch('/api/conversations');
       const data = await res.json();
-      setConversations(data);
+      // Sort by updatedAt descending (newest first)
+      const sortedData = data.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      setConversations(sortedData);
     } catch (error) {
       console.error('Failed to load conversations:', error);
     }
@@ -116,7 +125,8 @@ export default function ChatPage() {
 
             if (data.done) {
               setCurrentConversationId(data.conversationId);
-              loadConversations();
+              // Reload conversations immediately to show in Recents
+              setTimeout(() => loadConversations(), 500);
             }
           }
         }
@@ -144,6 +154,8 @@ export default function ChatPage() {
     const newSessionId = uuidv4();
     setSessionId(newSessionId);
     localStorage.setItem('sessionId', newSessionId);
+    // Reload conversations to show all previous chats
+    loadConversations();
   };
 
   return (
